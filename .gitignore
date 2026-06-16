@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific files
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Xcode build products
+DerivedData/
+build/
+Build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/configuration/
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Fastlane screenshots/reports, if you use fastlane later
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# CocoaPods, only if you use CocoaPods later
+# Pods/
