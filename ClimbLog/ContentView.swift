@@ -9,6 +9,35 @@ import SwiftUI
 import WatchConnectivity
 import Combine
 
+enum DetectionSource: String, Codable, Equatable {
+    case manualSave
+    case manualTimer
+    case autoDetected
+    case edited
+}
+
+struct MotionWindow: Identifiable, Codable, Equatable {
+    let id: UUID
+    let startDate: Date
+    let duration: TimeInterval
+    let accelMagnitudeMean: Double
+    let accelMagnitudeStd: Double
+    let gyroMagnitudeMean: Double
+    let gyroMagnitudeStd: Double
+    let heartRate: Double?
+
+    init(id: UUID = UUID(), startDate: Date, duration: TimeInterval, accelMean: Double, accelStd: Double, gyroMean: Double, gyroStd: Double, heartRate: Double? = nil) {
+        self.id = id
+        self.startDate = startDate
+        self.duration = duration
+        self.accelMagnitudeMean = accelMean
+        self.accelMagnitudeStd = accelStd
+        self.gyroMagnitudeMean = gyroMean
+        self.gyroMagnitudeStd = gyroStd
+        self.heartRate = heartRate
+    }
+}
+
 struct ClimbLogEntry: Identifiable, Codable, Equatable {
     let id: UUID
     var grade: String
@@ -19,6 +48,14 @@ struct ClimbLogEntry: Identifiable, Codable, Equatable {
     var note: String?
     var gym: String?
     var sector: String?
+    
+    // New fields for Start/Stop mode
+    var startDate: Date?
+    var endDate: Date?
+    var durationSeconds: TimeInterval?
+    var detectionSource: DetectionSource = .manualSave
+    var detectionConfidence: Double?
+    var motionWindows: [MotionWindow]?
 
     init(
         id: UUID = UUID(),
@@ -29,7 +66,13 @@ struct ClimbLogEntry: Identifiable, Codable, Equatable {
         result: String? = nil,
         note: String? = nil,
         gym: String? = nil,
-        sector: String? = nil
+        sector: String? = nil,
+        startDate: Date? = nil,
+        endDate: Date? = nil,
+        durationSeconds: TimeInterval? = nil,
+        detectionSource: DetectionSource = .manualSave,
+        detectionConfidence: Double? = nil,
+        motionWindows: [MotionWindow]? = nil
     ) {
         self.id = id
         self.grade = grade
@@ -40,6 +83,12 @@ struct ClimbLogEntry: Identifiable, Codable, Equatable {
         self.note = note
         self.gym = gym
         self.sector = sector
+        self.startDate = startDate
+        self.endDate = endDate
+        self.durationSeconds = durationSeconds
+        self.detectionSource = detectionSource
+        self.detectionConfidence = detectionConfidence
+        self.motionWindows = motionWindows
     }
 }
 
@@ -331,6 +380,12 @@ struct ClimbDetailView: View {
                         LabeledContent("Grade", value: entry.grade)
                         LabeledContent("Color", value: ClimbColor(name: entry.colorName).displayName)
                         LabeledContent("Date", value: entry.date.formatted(date: .abbreviated, time: .shortened))
+                        
+                        if let duration = entry.durationSeconds {
+                            LabeledContent("Duration", value: duration.formattedDuration())
+                        }
+                        
+                        LabeledContent("Source", value: entry.detectionSource.rawValue.capitalized)
                     }
 
                     Section {
@@ -449,6 +504,14 @@ struct ClimbEntryRow: View {
             Text(colorEnum.displayName)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            if let duration = entry.durationSeconds {
+                Text(duration.formattedDuration())
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 40, alignment: .trailing)
+            }
+
             Text(entry.grade)
                 .fontWeight(.semibold)
         }
@@ -480,6 +543,15 @@ extension Array where Element == String {
                 lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value > rhs.value
             }
             .first?.key
+    }
+}
+
+extension TimeInterval {
+    func formattedDuration() -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.minute, .second]
+        formatter.zeroFormattingBehavior = .pad
+        return formatter.string(from: self) ?? "0:00"
     }
 }
 

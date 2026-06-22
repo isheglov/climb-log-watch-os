@@ -3,6 +3,35 @@ import SwiftUI
 import WatchConnectivity
 import Combine
 
+enum DetectionSource: String, Codable, Equatable {
+    case manualSave
+    case manualTimer
+    case autoDetected
+    case edited
+}
+
+struct MotionWindow: Identifiable, Codable, Equatable {
+    let id: UUID
+    let startDate: Date
+    let duration: TimeInterval
+    let accelMagnitudeMean: Double
+    let accelMagnitudeStd: Double
+    let gyroMagnitudeMean: Double
+    let gyroMagnitudeStd: Double
+    let heartRate: Double?
+
+    init(id: UUID = UUID(), startDate: Date, duration: TimeInterval, accelMean: Double, accelStd: Double, gyroMean: Double, gyroStd: Double, heartRate: Double? = nil) {
+        self.id = id
+        self.startDate = startDate
+        self.duration = duration
+        self.accelMagnitudeMean = accelMean
+        self.accelMagnitudeStd = accelStd
+        self.gyroMagnitudeMean = gyroMean
+        self.gyroMagnitudeStd = gyroStd
+        self.heartRate = heartRate
+    }
+}
+
 struct Climb: Identifiable, Codable, Equatable {
     let id: UUID
     var date: Date
@@ -13,6 +42,14 @@ struct Climb: Identifiable, Codable, Equatable {
     var note: String?
     var gym: String?
     var sector: String?
+    
+    // New fields for Start/Stop mode
+    var startDate: Date?
+    var endDate: Date?
+    var durationSeconds: TimeInterval?
+    var detectionSource: DetectionSource = .manualSave
+    var detectionConfidence: Double?
+    var motionWindows: [MotionWindow]?
 
     init(
         id: UUID = UUID(),
@@ -23,7 +60,13 @@ struct Climb: Identifiable, Codable, Equatable {
         result: String? = nil,
         note: String? = nil,
         gym: String? = nil,
-        sector: String? = nil
+        sector: String? = nil,
+        startDate: Date? = nil,
+        endDate: Date? = nil,
+        durationSeconds: TimeInterval? = nil,
+        detectionSource: DetectionSource = .manualSave,
+        detectionConfidence: Double? = nil,
+        motionWindows: [MotionWindow]? = nil
     ) {
         self.id = id
         self.date = date
@@ -34,10 +77,16 @@ struct Climb: Identifiable, Codable, Equatable {
         self.note = note
         self.gym = gym
         self.sector = sector
+        self.startDate = startDate
+        self.endDate = endDate
+        self.durationSeconds = durationSeconds
+        self.detectionSource = detectionSource
+        self.detectionConfidence = detectionConfidence
+        self.motionWindows = motionWindows
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, date, grade, colorName, colorHex, result, note, gym, sector
+        case id, date, grade, colorName, colorHex, result, note, gym, sector, startDate, endDate, durationSeconds, detectionSource, detectionConfidence, motionWindows
     }
 
     init(from decoder: Decoder) throws {
@@ -51,6 +100,12 @@ struct Climb: Identifiable, Codable, Equatable {
         note = try container.decodeIfPresent(String.self, forKey: .note)
         gym = try container.decodeIfPresent(String.self, forKey: .gym)
         sector = try container.decodeIfPresent(String.self, forKey: .sector)
+        startDate = try container.decodeIfPresent(Date.self, forKey: .startDate)
+        endDate = try container.decodeIfPresent(Date.self, forKey: .endDate)
+        durationSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .durationSeconds)
+        detectionSource = try container.decodeIfPresent(DetectionSource.self, forKey: .detectionSource) ?? .manualSave
+        detectionConfidence = try container.decodeIfPresent(Double.self, forKey: .detectionConfidence)
+        motionWindows = try container.decodeIfPresent([MotionWindow].self, forKey: .motionWindows)
     }
 }
 
@@ -122,7 +177,6 @@ final class WatchClimbSyncManager: NSObject, WCSessionDelegate {
 }
 
 extension Color {
-    // Map color names to system colors for persistence simplicity
     static func fromName(_ name: String) -> Color {
         return ClimbColor(name: name).swiftUIColor
     }

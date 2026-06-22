@@ -10,11 +10,17 @@ import WatchKit
 
 struct ContentView: View {
     @StateObject private var store = ClimbStore()
+    @StateObject private var motionManager = MotionManager()
 
     @State private var selectedGrade: String = "4"
     @State private var selectedColorName: String = "blue"
     @State private var showSavedTick: Bool = false
     @State private var lastSavedClimb: Climb? = nil
+    
+    @State private var isRecording = false
+    @State private var recordingStartDate: Date?
+    @State private var elapsedTime: TimeInterval = 0
+    @State private var timer: Timer?
 
     private let grades: [String] = ["4-", "4", "4+", "5-", "5", "5+", "6-", "6", "6+", "7-", "7", "7+", "8-", "8", "8+", "9-", "9", "9+", "10-", "10", "10+", "11-", "11", "11+"]
     private let colorOptions: [(name: String, color: Color)] = [
@@ -27,65 +33,19 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 10) {
-                NavigationLink {
-                    GradeSelectionView(grades: grades, selectedGrade: $selectedGrade)
-                } label: {
-                    VStack(spacing: 0) {
-                        Text("Grade")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(selectedGrade)
-                            .font(.system(size: 48, weight: .semibold, design: .rounded))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 70)
-                    .padding(.trailing, 24)
-                    .contentShape(Rectangle())
+            ZStack {
+                if isRecording {
+                    RecordingView(
+                        grade: selectedGrade,
+                        colorName: selectedColorName,
+                        color: selectedColor,
+                        elapsedTime: elapsedTime,
+                        onStop: stopRecording
+                    )
+                } else {
+                    MainSelectionView
                 }
-                .buttonStyle(.plain)
-                .padding(.trailing, 24)
-
-                NavigationLink {
-                    ColorSelectionView(colorOptions: colorOptions, selectedColorName: $selectedColorName)
-                } label: {
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(selectedColor)
-                            .frame(width: 20, height: 20)
-                            .overlay(
-                                Circle().stroke(Color.primary.opacity(selectedColorName == "white" ? 0.35 : 0), lineWidth: 1)
-                            )
-                        Text(selectedColorName.capitalized)
-                            .font(.title3.weight(.medium))
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                Spacer(minLength: 0)
-
-                if showSavedTick, lastSavedClimb != nil {
-                    Button("Undo", action: undoLastSave)
-                        .font(.caption.weight(.semibold))
-                        .buttonStyle(.bordered)
-                }
-
-                Button(action: saveClimb) {
-                    HStack {
-                        Image(systemName: showSavedTick ? "checkmark.circle.fill" : "plus.circle")
-                        Text(showSavedTick ? "Saved" : "Save")
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.borderedProminent)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
@@ -96,6 +56,121 @@ struct ContentView: View {
                     .labelStyle(.iconOnly)
                 }
             }
+        }
+    }
+
+    private var MainSelectionView: some View {
+        VStack(spacing: 10) {
+            NavigationLink {
+                GradeSelectionView(grades: grades, selectedGrade: $selectedGrade)
+            } label: {
+                VStack(spacing: 0) {
+                    Text("Grade")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(selectedGrade)
+                        .font(.system(size: 48, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .frame(maxWidth: .infinity, minHeight: 70)
+                .padding(.trailing, 24)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 24)
+
+            NavigationLink {
+                ColorSelectionView(colorOptions: colorOptions, selectedColorName: $selectedColorName)
+            } label: {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(selectedColor)
+                        .frame(width: 20, height: 20)
+                        .overlay(
+                            Circle().stroke(Color.primary.opacity(selectedColorName == "white" ? 0.35 : 0), lineWidth: 1)
+                        )
+                        Text(selectedColorName.capitalized)
+                            .font(.title3.weight(.medium))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
+
+            if showSavedTick, lastSavedClimb != nil {
+                Button("Undo", action: undoLastSave)
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.bordered)
+            }
+
+            VStack(spacing: 8) {
+                Button(action: startRecording) {
+                    Label("Start", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+
+                Button(action: saveClimb) {
+                    HStack {
+                        Image(systemName: showSavedTick ? "checkmark.circle.fill" : "plus.circle")
+                        Text(showSavedTick ? "Saved" : "Save")
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    private func startRecording() {
+        recordingStartDate = Date()
+        motionManager.startRecording()
+        isRecording = true
+        
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            if let start = recordingStartDate {
+                elapsedTime = Date().timeIntervalSince(start)
+            }
+        }
+    }
+
+    private func stopRecording() {
+        timer?.invalidate()
+        let endTime = Date()
+        let duration = endTime.timeIntervalSince(recordingStartDate ?? endTime)
+        let windows = motionManager.stopRecording()
+        
+        let newClimb = Climb(
+            date: Date(),
+            grade: selectedGrade,
+            colorName: selectedColorName,
+            startDate: recordingStartDate,
+            endDate: endTime,
+            durationSeconds: duration,
+            detectionSource: .manualTimer,
+            motionWindows: windows
+        )
+        
+        store.add(newClimb)
+        lastSavedClimb = newClimb
+        
+        WKInterfaceDevice.current().play(.success)
+        
+        withAnimation {
+            isRecording = false
+            showSavedTick = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation { showSavedTick = false }
         }
     }
 
@@ -117,6 +192,45 @@ struct ContentView: View {
         store.delete(at: IndexSet(integer: 0))
         self.lastSavedClimb = nil
         withAnimation { showSavedTick = false }
+    }
+}
+
+struct RecordingView: View {
+    let grade: String
+    let colorName: String
+    let color: Color
+    let elapsedTime: TimeInterval
+    let onStop: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Circle().fill(color).frame(width: 12, height: 12)
+                Text("\(grade) \(colorName.capitalized)")
+                    .font(.headline)
+            }
+            .foregroundStyle(.secondary)
+
+            Text(formatTime(elapsedTime))
+                .font(.system(size: 54, weight: .bold, design: .monospaced))
+                .minimumScaleFactor(0.8)
+
+            Button(action: onStop) {
+                Text("Stop")
+                    .font(.title3.bold())
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .cornerRadius(20)
+        }
+        .padding()
+    }
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }
 
@@ -157,6 +271,13 @@ struct ClimbLogRow: View {
                         .lineLimit(1)
                     Text(climb.grade)
                         .fontWeight(.semibold)
+                    
+                    if let duration = climb.durationSeconds {
+                        Text("\(Int(duration))s")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    
                     Spacer(minLength: 0)
                 }
                 .font(.headline)
